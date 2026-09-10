@@ -1,0 +1,171 @@
+require_relative '../lib/board'
+
+RSpec.describe Board do
+  subject(:board) { described_class.new }
+
+  let(:drawn_grid) do
+    [
+      %w[X O X X X O O],
+      %w[X O O O X X O],
+      %w[X X X O O O X],
+      %w[O X O O X X O],
+      %w[X O O X X O O],
+      %w[X X X O O O X]
+    ].map(&:dup)
+  end
+
+  describe '#initialize' do
+    it 'creates a 6 by 7 grid' do
+      expect(board.grid.size).to eq(6)
+      expect(board.grid.first.size).to eq(7)
+    end
+
+    it 'starts completely empty' do
+      expect(board.grid.flatten.compact).to be_empty
+    end
+  end
+
+  describe '#valid_column?' do
+    it 'accepts columns 0 through 6' do
+      expect(board.valid_column?(0)).to be true
+      expect(board.valid_column?(6)).to be true
+    end
+
+    it 'rejects out-of-range and non-integer input' do
+      expect(board.valid_column?(7)).to be false
+      expect(board.valid_column?(-1)).to be false
+      expect(board.valid_column?('a')).to be false
+    end
+  end
+
+  describe '#drop' do
+    it 'places the piece in the bottom row of an empty column' do
+      expect(board.drop(3, 'X')).to eq([5, 3])
+      expect(board.grid[5][3]).to eq('X')
+    end
+
+    it 'stacks the next piece on top' do
+      board.drop(3, 'X')
+      expect(board.drop(3, 'O')).to eq([4, 3])
+    end
+
+   
+    it 'changes the target cell from empty to the symbol' do
+      expect { board.drop(0, 'X') }
+        .to change { board.grid[5][0] }.from(nil).to('X')
+    end
+
+    context 'when the column is full' do
+      before { 6.times { board.drop(0, 'X') } }
+
+      it 'raises ColumnFullError' do
+        expect { board.drop(0, 'X') }.to raise_error(ColumnFullError, /full/)
+      end
+    end
+
+    context 'when the column does not exist' do
+      it 'raises InvalidColumnError' do
+        expect { board.drop(99, 'X') }.to raise_error(InvalidColumnError)
+      end
+    end
+  end
+
+  describe '#available_columns' do
+
+    it 'lists every column on an empty board' do
+      expect(board.available_columns).to contain_exactly(0, 1, 2, 3, 4, 5, 6)
+    end
+
+    it 'excludes a full column' do
+      6.times { board.drop(2, 'X') }
+      expect(board.available_columns).not_to include(2)
+    end
+  end
+
+  describe '#full?' do
+    it 'is false on a new board' do
+      expect(board).not_to be_full
+    end
+
+    it 'is true when every column is filled' do
+      expect(described_class.new(drawn_grid)).to be_full
+    end
+  end
+
+  describe '#winner' do
+    it 'is nil on an empty board' do
+      expect(board.winner).to be_nil
+    end
+
+    it 'detects four in a row horizontally' do
+      4.times { |i| board.drop(i, 'X') }
+      expect(board.winner).to eq('X')
+    end
+
+    it 'detects four in a column vertically' do
+      4.times { board.drop(2, 'O') }
+      expect(board.winner).to eq('O')
+    end
+
+    it 'detects a diagonal going down-right' do
+      board.drop(0, 'X')
+      board.drop(1, 'O'); board.drop(1, 'X')
+      board.drop(2, 'O'); board.drop(2, 'O'); board.drop(2, 'X')
+      board.drop(3, 'O'); board.drop(3, 'O'); board.drop(3, 'O'); board.drop(3, 'X')
+
+      expect(board.winner).to eq('X')
+    end
+
+    it 'detects a diagonal going down-left' do
+      board.drop(3, 'X')
+      board.drop(2, 'O'); board.drop(2, 'X')
+      board.drop(1, 'O'); board.drop(1, 'O'); board.drop(1, 'X')
+      board.drop(0, 'O'); board.drop(0, 'O'); board.drop(0, 'O'); board.drop(0, 'X')
+
+      expect(board.winner).to eq('X')
+    end
+
+    it 'does not count three in a row' do
+      3.times { |i| board.drop(i, 'X') }
+      expect(board.winner).to be_nil
+    end
+
+    it 'does not count a line of mixed symbols' do
+      board.drop(0, 'X'); board.drop(1, 'X')
+      board.drop(2, 'O'); board.drop(3, 'X')
+
+      expect(board.winner).to be_nil
+    end
+
+    it 'is nil on a full but drawn board' do
+      expect(described_class.new(drawn_grid).winner).to be_nil
+    end
+  end
+
+  describe '#winning_line' do
+    it 'returns the four winning cells' do
+      4.times { |i| board.drop(i, 'X') }
+      expect(board.winning_line.cells.size).to eq(4)
+      expect(board.winning_line.first_symbol).to eq('X')
+    end
+  end
+
+  describe '#reset' do
+    it 'clears the grid and returns self' do
+      board.drop(0, 'X')
+      expect(board.reset).to be(board)
+      expect(board.grid.flatten.compact).to be_empty
+    end
+  end
+
+  describe '#to_s' do
+    it 'renders six rows plus a divider and a header' do
+      expect(board.to_s.lines.size).to eq(8)
+    end
+
+    it 'shows dropped pieces' do
+      board.drop(0, 'X')
+      expect(board.to_s).to include('X')
+    end
+  end
+end
